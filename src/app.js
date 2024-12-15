@@ -5,8 +5,8 @@ import fetch from "node-fetch";
 
 const app = express();
 
-let accessToken = process.env.SPOTIFY_CLIENT_ID;
-let tokenExpiryTime = process.env.SPOTIFY_CLIENT_SECRET;
+let accessToken = null;
+let tokenExpiryTime = null;
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN,
@@ -19,8 +19,8 @@ app.use(express.static("public")); // Serve static files from the "public" folde
 app.use(cookieParser()); // Use cookie-parser for handling cookies
 
 async function fetchSpotifyToken() {
-    const clientId = "your_client_id";
-    const clientSecret = "your_client_secret";
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
 
     const response = await fetch("https://accounts.spotify.com/api/token", {
         method: "POST",
