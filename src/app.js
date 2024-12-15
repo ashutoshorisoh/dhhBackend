@@ -2,42 +2,64 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import fetch from "node-fetch";
+import dotenv from "dotenv";
+import artistDetailRoutes from './routes/artistDetail.routes.js';
+import userRouter from './routes/user.routes.js';
+import videoRouter from './routes/video.routes.js';
 
-// Import artist routes
-import artistDetailRoutes from './routes/artistDetail.routes.js'
+dotenv.config();
 
 const app = express();
 
 let accessToken = null;
 let tokenExpiryTime = null;
 
-app.use(cors({
-    origin: process.env.CORS_ORIGIN,
-    credentials: true
-}));
+// CORS configuration
+const corsOptions = {
+    origin: process.env.CORS_ORIGIN || '*', // Replace '*' with your frontend's domain in production
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true, // Allow credentials like cookies
+};
 
-app.use(express.json({ limit: "16kb" })); // Parse JSON payloads up to 16kb in size
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded data
-app.use(express.static("public")); // Serve static files from the "public" folder
-app.use(cookieParser()); // Use cookie-parser for handling cookies
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle preflight requests
+
+app.use(express.json({ limit: "16kb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static("public"));
+app.use(cookieParser());
 
 // Function to fetch Spotify access token
 async function fetchSpotifyToken() {
-    const clientId = process.env.SPOTIFY_CLIENT_ID;
-    const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    try {
+        const clientId = process.env.SPOTIFY_CLIENT_ID;
+        const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
 
-    const response = await fetch("https://accounts.spotify.com/api/token", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Authorization: `Basic ${Buffer.from(clientId + ":" + clientSecret).toString("base64")}`,
-        },
-        body: "grant_type=client_credentials",
-    });
+        if (!clientId || !clientSecret) {
+            throw new Error('Spotify client credentials are missing');
+        }
 
-    const data = await response.json();
-    accessToken = data.access_token;
-    tokenExpiryTime = Date.now() + data.expires_in * 1000; // Save expiration time
+        const response = await fetch("https://accounts.spotify.com/api/token", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                Authorization: `Basic ${Buffer.from(clientId + ":" + clientSecret).toString("base64")}`,
+            },
+            body: "grant_type=client_credentials",
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            accessToken = data.access_token;
+            tokenExpiryTime = Date.now() + data.expires_in * 1000; // Save expiration time
+        } else {
+            throw new Error(data.error_description || 'Failed to fetch access token');
+        }
+    } catch (error) {
+        console.error('Error fetching Spotify token:', error);
+    }
 }
 
 // Endpoint to get Spotify token
@@ -48,15 +70,9 @@ app.get("/spotify-token", async (req, res) => {
     res.json({ accessToken });
 });
 
-// Import other routes (e.g., user, video)
-import userRouter from './routes/user.routes.js';
-import videoRouter from './routes/video.routes.js';
-
 // Mount routes
-app.use("/api/v1/users", userRouter); // Mount user routes at /api/v1/users
-app.use("/api/v1", videoRouter);      // Mount video routes at /api/v1
-
-// Mount artist routes at /api/v1/artists
-app.use("/api/v1/artists", artistDetailRoutes); // Adding artist routes here
+app.use("/api/v1/users", userRouter);
+app.use("/api/v1", videoRouter);
+app.use("/api/v1/artists", artistDetailRoutes);
 
 export { app };
